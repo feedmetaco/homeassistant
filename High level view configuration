@@ -71,17 +71,19 @@ sections:
                     ]]]
               grid:
                 - grid-template-areas: |
-                    "i status"
-                    "n n"
+                    "i summary"
+                    "n summary"
+                    "status status"
                     "power power"
                     "meta meta"
-                - grid-template-columns: 1fr 1fr
-                - grid-template-rows: auto min-content min-content min-content
-                - row-gap: "[[[ return variables.row_gap_px + 'px'; ]]]"
+                - grid-template-columns: minmax(0, auto) 1fr
+                - grid-template-rows: auto min-content min-content min-content min-content
+                - row-gap: "[[[ return (variables.row_gap_px || 6) + 'px'; ]]]"
               name:
-                - justify-self: center
-                - align-self: center
+                - justify-self: start
+                - align-self: end
                 - margin-top: "-2px"
+                - margin-left: 4px
                 - font-size: "[[[ return variables.name_font_px + 'px'; ]]]"
                 - font-weight: 900
                 - color: White
@@ -104,56 +106,143 @@ sections:
                 - filter: drop-shadow(0 0 8px rgba(106,255,0,.25))
               custom_fields:
                 status:
-                  - justify-self: end
+                  - display: flex
+                  - flex-direction: column
+                  - gap: 8px
+                  - align-items: stretch
+                  - justify-self: stretch
                   - align-self: start
                   - font-size: 11px
-                  - text-align: right
+                  - text-align: left
+                  - width: 100%
+                summary:
+                  - justify-self: stretch
+                  - align-self: center
+                  - margin-left: 6px
+                  - margin-top: -2px
+                  - display: flex
+                  - flex-direction: column
+                  - gap: 6px
+                  - font-size: 12px
+                  - color: "#D6DEE6"
                 power:
+                  - display: flex
+                  - flex-direction: column
+                  - gap: 8px
                   - justify-self: center
                   - align-self: center
                   - font-size: 12px
                   - font-weight: 600
                   - width: 100%
                 meta:
+                  - display: grid
+                  - grid-template-columns: repeat(auto-fit, minmax(140px, 1fr))
+                  - gap: 10px
                   - justify-self: stretch
                   - align-self: end
                   - font-size: 11px
                   - color: "[[[ return variables.ink; ]]]"
             custom_fields:
+              summary: |
+                [[[ 
+                  const stateObj = states['sensor.zz_pwr_pdu_state'];
+                  const raw = (stateObj?.state || 'unknown').toUpperCase();
+                  const ok = ['CONNECTED','ONLINE','UP'].includes(raw);
+                  const color = ok ? variables.ok : variables.alert;
+                  const clientsState = states['sensor.zz_pwr_pdu_clients']?.state;
+                  const clientsNumber = Number(clientsState);
+                  const clientsLabel = isNaN(clientsNumber)
+                    ? `${clientsState || '--'} clients`
+                    : `${clientsNumber} client${clientsNumber === 1 ? '' : 's'}`;
+                  const uptime = states['sensor.zz_pwr_pdu_uptime']?.state || '--';
+                  const seen = stateObj?.last_changed ? new Date(stateObj.last_changed).toLocaleString() : '';
+                  const use = Number(states['sensor.zz_pwr_pdu_ac_power_consumption']?.state);
+                  const bud = Number(states['sensor.zz_pwr_pdu_ac_power_budget']?.state);
+                  const pct = (!isNaN(use) && !isNaN(bud) && bud > 0) ? Math.round((use / bud) * 100) : null;
+                  const head = (!isNaN(use) && !isNaN(bud)) ? Math.max(0, Math.round(bud - use)) : null;
+                  const loadLine = pct === null ? '--' : `${pct}% load`;
+                  const headLine = head === null ? '' : `<span style="opacity:.7;">${head}W headroom</span>`;
+                  return `
+                    <div style="display:flex;flex-direction:column;gap:6px;">
+                      <div style="display:flex;align-items:center;gap:10px;">
+                        <ha-icon icon="mdi:access-point-network" style="width:18px;height:18px;color:${color};"></ha-icon>
+                        <div style="display:flex;flex-direction:column;gap:2px;">
+                          <span style="font-size:13px;font-weight:700;color:${color};letter-spacing:.4px;">${raw}</span>
+                          <span style="font-size:11px;opacity:.75;">${clientsLabel}</span>
+                        </div>
+                      </div>
+                      <div style="display:flex;align-items:center;gap:10px;">
+                        <ha-icon icon="mdi:clock-time-four-outline" style="width:16px;height:16px;color:${variables.info};opacity:.85;"></ha-icon>
+                        <div style="display:flex;flex-direction:column;gap:2px;">
+                          <span style="font-size:11px;opacity:.75;">Uptime ${uptime}</span>
+                          ${seen ? `<span style="font-size:10px;opacity:.6;">Last change ${seen}</span>` : ''}
+                        </div>
+                      </div>
+                      <div style="display:flex;align-items:center;gap:10px;">
+                        <ha-icon icon="mdi:gauge" style="width:16px;height:16px;color:${variables.warn};opacity:.85;"></ha-icon>
+                        <div style="display:flex;flex-direction:column;gap:2px;">
+                          <span style="font-size:12px;font-weight:600;">${loadLine}</span>
+                          ${headLine}
+                        </div>
+                      </div>
+                    </div>`;
+                ]]]
               status: |
-                [[[
+                [[[ 
                   const s = (states['sensor.zz_pwr_pdu_state']?.state || 'unknown').toUpperCase();
                   const up = (states['update.zz_pwr_pdu']?.state || 'off') === 'on';
                   const ok  = ['CONNECTED','ONLINE','UP'].includes(s);
                   const c1  = ok ? variables.ok : variables.alert;
-                  const t1  = ok ? 'CONNECTED' : (s || 'UNKNOWN');
+                  const t1  = ok ? 'Connected' : (s || 'Unknown');
                   const c2  = up ? variables.warn : variables.ok;
-                  const t2  = up ? 'UPDATE' : 'UP-TO-DATE';
-                  const pill = (text,color)=>`
-                    <span style="
-                      display:inline-block;padding:2px 8px;margin-left:6px;
-                      border:1px solid ${color}55;border-radius:999px;
-                      color:${color};background:rgba(255,255,255,0.03);font-weight:700;">
-                      ${text}
-                    </span>`;
-                  return pill(t1,c1) + pill(t2,c2);
+                  const t2  = up ? 'Update Available' : 'Up to Date';
+                  const srs = states['sensor.zz_pwr_pdu_uptime']?.attributes?.last_reboot || null;
+                  const row = (label,text,color,secondary='')=>`
+                    <div style="
+                      display:flex;flex-direction:column;gap:4px;
+                      padding:6px 10px;border-radius:10px;
+                      background:rgba(255,255,255,0.03);
+                      border:1px solid rgba(255,255,255,0.06);">
+                      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+                        <span style="font-weight:600;letter-spacing:.3px;opacity:.7;">${label}</span>
+                        <span style="
+                          display:inline-flex;align-items:center;padding:3px 12px;
+                          border-radius:999px;border:1px solid ${color}44;
+                          background:rgba(255,255,255,0.05);
+                          color:${color};font-weight:700;">
+                          ${text}
+                        </span>
+                      </div>
+                      ${secondary}
+                    </div>`;
+                  const reboot = srs ? `<span style="font-size:10px;opacity:.7;">Last reboot ${srs}</span>` : '';
+                  return row('Connection',t1,c1,reboot) + row('Firmware',t2,c2);
                 ]]]
               power: |
                 [[[
                   const use = Number(states['sensor.zz_pwr_pdu_ac_power_consumption']?.state);
                   const bud = Number(states['sensor.zz_pwr_pdu_ac_power_budget']?.state);
                   if (isNaN(use) || isNaN(bud) || bud <= 0) {
-                    return `<div style="opacity:.6">Power: -- / --</div>
-                            <div style="height:10px;border-radius:6px;background:#2a2f36;margin-top:4px;"></div>`;
+                    return `
+                      <div style="opacity:.6;display:flex;justify-content:space-between;">
+                        <span>Power Budget</span><span>-- / --</span>
+                      </div>
+                      <div style="height:10px;border-radius:6px;background:#2a2f36;"></div>`;
                   }
                   const pct = Math.min(100, Math.round((use/bud)*100));
+                  const rem = Math.max(0, Math.round(bud - use));
                   let col = variables.ok;
                   if (pct >= 90) col = variables.alert;
                   else if (pct >= 75) col = variables.warn;
 
                   return `
                     <div style="display:flex;justify-content:space-between;width:100%;">
-                      <span>Power</span><span>${Math.round(use)}W / ${Math.round(bud)}W (${pct}%)</span>
+                      <span>Power Budget</span>
+                      <span>${Math.round(use)}W / ${Math.round(bud)}W (${pct}%)</span>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;font-size:11px;opacity:.8;">
+                      <span>Headroom</span>
+                      <span>${rem}W</span>
                     </div>
                     <div style="height:10px;border-radius:6px;background:#2a2f36;margin-top:4px;overflow:hidden;">
                       <div style="
@@ -180,18 +269,40 @@ sections:
                   const up = states['sensor.zz_pwr_pdu_uptime']?.state || '-';
                   const cl = states['sensor.zz_pwr_pdu_clients']?.state || '-';
 
-                  const chip=(ic,txt)=>`
-                    <span style="display:inline-flex;align-items:center;gap:6px;margin-right:10px;">
-                      <ha-icon icon="${ic}" style="width:12px;height:12px;color:${variables.info};"></ha-icon>
-                      <span>${txt}</span>
-                    </span>`;
+                  const block=(ic,label,value,sub='')=>`
+                    <div style="
+                      padding:8px 12px;border-radius:12px;
+                      background:rgba(255,255,255,0.03);
+                      border:1px solid rgba(255,255,255,0.06);
+                      display:flex;align-items:flex-start;gap:12px;">
+                      <ha-icon icon="${ic}" style="width:16px;height:16px;margin-top:2px;color:${variables.info};"></ha-icon>
+                      <div style="display:flex;flex-direction:column;gap:4px;">
+                        <span style="font-size:10px;letter-spacing:.4px;text-transform:uppercase;opacity:.7;">${label}</span>
+                        <span style="font-size:12px;color:#e8f0f5;">${value}</span>
+                        ${sub}
+                      </div>
+                    </div>`;
 
-                  return chip('mdi:power-plug','Outlets ' + on+'/'+tot) + 
-                         chip('mdi:usb','USB ' + usbOn+'/'+usbTot) + 
-                         chip('mdi:clock-outline','Uptime ' + up) + 
-                         chip('mdi:account-multiple','Clients ' + cl);
+                  const uptimeDetail = up && up !== '-' ? `<span style="font-size:10px;opacity:.7;">Since ${states['sensor.zz_pwr_pdu_uptime']?.attributes?.last_updated || 'unknown'}</span>` : '';
+                  return block('mdi:power-plug','Outlets', `${on}/${tot}`) +
+                         block('mdi:usb','USB Ports', `${usbOn}/${usbTot}`) +
+                         block('mdi:clock-outline','Uptime', up, uptimeDetail) +
+                         block('mdi:account-multiple','Clients', cl);
                 ]]]
           - type: horizontal-stack
+            card_mod:
+              style: |
+                :host {
+                  --stack-card-gap: 12px;
+                }
+                #root {
+                  gap: 12px;
+                  padding: 4px 0;
+                }
+                ha-card {
+                  background: none;
+                  box-shadow: none;
+                }
             cards:
               - type: custom:button-card
                 variables:
@@ -274,7 +385,7 @@ sections:
                         "bottom bottom"
                     - grid-template-columns: auto 1fr
                     - grid-template-rows: 1fr auto
-                    - gap: "-5px"
+                    - gap: 8px
                   custom_fields:
                     plug:
                       - justify-self: start
